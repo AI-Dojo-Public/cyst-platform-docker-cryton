@@ -36,7 +36,7 @@ class DockerTestModel(BehavioralModel):
     async def action_flow(self, message: Request) -> Tuple[int, Response]:
         raise RuntimeError("Docker test namespace does not support composite actions")
 
-    def action_effect(self, message: Request, node: Node) -> Tuple[int, Response]:
+    async def action_effect(self, message: Request, node: Node) -> Tuple[int, Response]:
         if not message.action:
             raise ValueError("Action not provided")
 

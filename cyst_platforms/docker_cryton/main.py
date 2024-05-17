@@ -1,17 +1,19 @@
-import uuid
-import time
 import os
+import time
 
-import requests
-import json
-
-from threading import Thread, Lock
-from typing import Optional, Union, Any, List, Dict
+from datetime import datetime
+from heapq import heappush, heappop
 from netaddr import IPAddress
+from typing import Optional, Union, Any, List, Tuple, Callable
+
+from cyst.api.environment.clock import Clock
+from cyst.api.host.service import ActiveService
 
 from cyst.api.configuration.configuration import ConfigItem
-from cyst.api.environment.configuration import EnvironmentConfiguration
-from cyst.api.environment.message import Request, Status, Response, Message
+from cyst.api.environment.configuration import EnvironmentConfiguration, GeneralConfiguration, ExploitConfiguration, \
+    ActionConfiguration
+from cyst.api.environment.infrastructure import EnvironmentInfrastructure
+from cyst.api.environment.message import Request, Status, Response, Message, MessageType
 from cyst.api.environment.messaging import EnvironmentMessaging
 from cyst.api.environment.platform import Platform, PlatformDescription
 from cyst.api.environment.platform_interface import PlatformInterface
@@ -19,7 +21,12 @@ from cyst.api.environment.platform_specification import PlatformSpecification, P
 from cyst.api.environment.resources import EnvironmentResources
 from cyst.api.logic.access import Authorization, AuthenticationTarget, AuthenticationToken
 from cyst.api.logic.action import Action
+from cyst.api.logic.metadata import Metadata
 from cyst.api.network.session import Session
+from cyst.api.utils.counter import Counter
+
+from cyst_platforms.docker_cryton.configuration import EnvironmentConfigurationImpl, GeneralConfigurationImpl
+from cyst_platforms.docker_cryton.message import RequestImpl, ResponseImpl
 
 
 CRYTON_IP = "127.0.0.1"
@@ -27,18 +34,23 @@ CRYTON_PORT = 8001
 CRYTON_URL = "http://" + CRYTON_IP + ":" + str(CRYTON_PORT) + "/"
 
 
-class DockerCrytonPlatform(Platform, EnvironmentMessaging):
+class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
 
-    def __init__(self, platform_interface: PlatformInterface, configuration: EnvironmentConfiguration, messaging: EnvironmentMessaging, resources: EnvironmentResources):
+    def __init__(self, platform_interface: PlatformInterface, general_configuration: GeneralConfiguration,
+                 resources: EnvironmentResources, action_configuration: ActionConfiguration,
+                 exploit_configuration: ExploitConfiguration, infrastructure: EnvironmentInfrastructure):
+
         self._platform_interface = platform_interface
-        self._configuration = configuration
-        self._messaging = messaging
+        self._infrastructure = infrastructure
         self._resources = resources
 
-        self._processing_thread: Optional[Thread] = None
-        self._processing_lock = Lock()
+        self._environment_configuration = EnvironmentConfigurationImpl()
+        self._environment_configuration.action = action_configuration
+        self._environment_configuration.exploit = exploit_configuration
+        self._environment_configuration.general = GeneralConfigurationImpl(self, general_configuration, self._infrastructure)
+
         self._message_queue = None
-        self._requests: Dict[int, Message] = {}
+        self._requests: List[Tuple[float, int, Message]] = []
 
         self._terminate = False
 
@@ -48,103 +60,109 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging):
         os.environ["CYST_PLATFORM_CRYTON_URL"] = CRYTON_URL
 
     def init(self) -> bool:
-        self._processing_thread = Thread(target=self._message_processor, daemon=True)
-        self._processing_thread.start()
         return True
 
     def terminate(self) -> bool:
-        self._terminate = True
-        self._processing_thread.join()
         return True
 
     def configure(self, *config_item: ConfigItem) -> 'Platform':
-        config = self._configuration.general.save_configuration(indent=1)
-
-        data = {
-            "name": "demo",
-            "description": str(config)
-        }
-
-        print("Creating Template")
-        template = requests.post('http://127.0.0.1:8000/templates/create/', data=json.dumps(data))
-        if template.status_code != 201:
-            raise RuntimeError(f"message: {template.text}, code: {template.status_code}")
-        else:
-            print("Template created successfully")
-            template_id = template.json()["id"]
-
-        data = {
-            "name": "run-" + str(uuid.uuid4()),
-            "template_id": template_id,
-            "agent_ids": [
-                1
-            ]
-        }
-
-        print("Creating Run")
-        run = requests.post('http://127.0.0.1:8000/runs/create/', data=json.dumps(data))
-        if run.status_code != 201:
-            raise RuntimeError(f"message: {run.text}, code: {run.status_code}")
-        else:
-            print("Run created successfully")
-            run_id = run.json()["id"]
-
-        print("Running the stuff")
-        run_start = requests.get(f"http://127.0.0.1:8000/runs/start/{run_id}/")
-        if run_start.status_code != 200:
-            raise RuntimeError(f"message: {run_start.text}, code: {run_start.status_code}")
-        else:
-            print("Everything started successfully")
+        c = GeneralConfigurationImpl.cast_from(self._environment_configuration.general)
+        c.configure(*config_item)
         return self
 
     @property
     def messaging(self) -> EnvironmentMessaging:
         return self
 
-    @property
-    def resources(self) -> EnvironmentResources:
-        return self._resources
-
-    def collect_messages(self) -> List[Message]:
-        pass
-
+    # ------------------------------------------------------------------------------------------------------------------
     # Environment messaging
     def send_message(self, message: Message, delay: int = 0) -> None:
         print("Sending message in a platform")
-        self._requests[message.id] = message
-        # Sending is realized just through the action
-        self._platform_interface.execute_request(message.cast_to(Request))
+
+        # Message should already have a caller_id in it. Add run_id to it to enable correct worker selection
+        run_id = self._infrastructure.runtime_configuration.run_id
+        message.platform_specific["caller_id"] = run_id + "." + message.platform_specific["caller_id"]
+
+        # Push it to request queue, from which it will be extracted in the process loop
+        heappush(self._requests, (self.current_time() + delay, message.id, message))
 
     def create_request(self, dst_ip: Union[str, IPAddress], dst_service: str = "", action: Optional[Action] = None, session: Optional[Session] = None,
                        auth: Optional[Union[Authorization, AuthenticationToken]] = None, original_request: Optional[Request] = None) -> Request:
         print("Creating request in a platform")
-        return self._messaging.create_request(dst_ip, dst_service, action, session, auth, original_request)
+        # TODO: How to get the src ip? Src service is obtained when the message is sent and available in a
+        #       Message.platform_specific property.
+        if isinstance(dst_ip, str):
+            dst_ip = IPAddress(dst_ip)
+
+        # TODO: Fill in data from original_request
+
+        request = RequestImpl(dst_ip, dst_service, action, session, auth, original_request)
+        return request
 
     def create_response(self, request: Request, status: Status, content: Optional[Any] = None,
                         session: Optional[Session] = None, auth: Optional[Union[Authorization, AuthenticationTarget]] = None,
                         original_response: Optional[Response] = None) -> Response:
         print("Creating response in a platform")
-        return self._messaging.create_response(request, status, content, session, auth, original_response)
+
+        response = ResponseImpl(RequestImpl.cast_from(request), status, content, session, auth, original_response)
+
+        return response
 
     def open_session(self, request: Request) -> Session:
+        # TODO
+        pass
+    # ------------------------------------------------------------------------------------------------------------------
+
+    # ------------------------------------------------------------------------------------------------------------------
+    # Clock
+    @property
+    def clock(self) -> Clock:
+        return self
+
+    def current_time(self) -> float:
+        return time.time()
+
+    def real_time(self) -> datetime:
+        return datetime.now()
+
+    def timeout(self, callback: Union[ActiveService, Callable[[Message], Tuple[bool, int]]], delay: float, parameter: Any = None) -> None:
+        # TODO
         pass
 
-    def _message_processor(self) -> None:
-        while not self._terminate:
-            # Get status of all requests
-            # requests_status = requests.get(CRYTON_URL + "step_executions/").json()
-            # print(requests_status)
-            # Convert Cryton responses to CYST responses
-            # Push responses into the queue
-            # with self._processing_lock:
-            #     print("Locked part")
-            # Let the computer rest
-            time.sleep(1)
+    # ------------------------------------------------------------------------------------------------------------------
+    @property
+    def configuration(self) -> EnvironmentConfiguration:
+        return self._environment_configuration
+
+    async def process(self, time: int) -> bool:
+        current_time = self.current_time()
+        have_something_to_do = False
+
+        # Dispatch all requests, whose time has came. Responses are managed through the behavioral models, so no big
+        # deal here.
+        requests_to_process = []
+        if self._requests:
+            have_something_to_do = True
+            timeout, _, _ = self._requests[0]
+            while timeout <= current_time:
+                _, _, message = heappop(self._requests)
+                requests_to_process.append(message)
+                if self._requests:
+                    timeout, _, _ = self._requests[0]
+                else:
+                    break
+
+        for request in requests_to_process:
+            self._platform_interface.execute_task(request)
+
+        return have_something_to_do
 
 
-def create_platform(platform_interface: PlatformInterface, configuration: EnvironmentConfiguration,
-                    messaging: EnvironmentMessaging, resources: EnvironmentResources) -> DockerCrytonPlatform:
-    p = DockerCrytonPlatform(platform_interface, configuration, messaging, resources)
+def create_platform(platform_interface: PlatformInterface, general_configuration: GeneralConfiguration,
+                    resources: EnvironmentResources, action_configuration: ActionConfiguration,
+                    exploit_configuration: ExploitConfiguration, infrastructure: EnvironmentInfrastructure) -> DockerCrytonPlatform:
+    p = DockerCrytonPlatform(platform_interface, general_configuration, resources, action_configuration,
+                             exploit_configuration, infrastructure)
     return p
 
 

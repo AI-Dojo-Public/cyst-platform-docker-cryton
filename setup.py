@@ -68,9 +68,6 @@ setup(
     entry_points={
         'cyst.platforms': [
             'docker+cryton=cyst_platforms.docker_cryton.main:platform_description'
-        ],
-        'cyst.models': [
-            'docker_test=cyst_models.docker_test.main:behavioral_model_description'
         ]
     },
 

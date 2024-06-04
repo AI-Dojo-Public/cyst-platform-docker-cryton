@@ -14,9 +14,17 @@ from cyst.api.utils.counter import Counter
 @dataclass
 class MessageImpl(Message):
 
-    def __init__(self, type: MessageType, src_ip: IPAddress = None, dst_ip: IPAddress = None,
-                 dst_service: str = "", session: Session = None,
-                 auth: Optional[Union[Authorization, AuthenticationToken, AuthenticationTarget]] = None, force_id: int = -1, ttl: int = 64):
+    def __init__(
+        self,
+        type: MessageType,
+        src_ip: IPAddress = None,
+        dst_ip: IPAddress = None,
+        dst_service: str = "",
+        session: Session = None,
+        auth: Optional[Union[Authorization, AuthenticationToken, AuthenticationTarget]] = None,
+        force_id: int = -1,
+        ttl: int = 64,
+    ):
 
         super(MessageImpl, self).__init__()
 
@@ -51,7 +59,7 @@ class MessageImpl(Message):
 
     @property
     def dst_ip(self) -> Optional[IPAddress]:
-        return self.dst_ip
+        return self._dst_ip
 
     @property
     def src_service(self) -> Optional[str]:
@@ -93,9 +101,15 @@ class MessageImpl(Message):
 
 class RequestImpl(Request, MessageImpl):
 
-    def __init__(self, dst_ip: Union[str, IPAddress], dst_service: str = "", action: Action = None,
-                 session: Session = None, auth: Optional[Union[Authorization, AuthenticationToken, AuthenticationTarget]] = None,
-                 original_request: Optional[Request] = None):
+    def __init__(
+        self,
+        dst_ip: Union[str, IPAddress],
+        dst_service: str = "",
+        action: Action = None,
+        session: Session = None,
+        auth: Optional[Union[Authorization, AuthenticationToken, AuthenticationTarget]] = None,
+        original_request: Optional[Request] = None,
+    ):
         if type(dst_ip) is str:
             dst_ip = IPAddress(dst_ip)
 
@@ -111,8 +125,9 @@ class RequestImpl(Request, MessageImpl):
         if original_request:
             _src_ip = original_request.src_ip
 
-        super(RequestImpl, self).__init__(MessageType.REQUEST, _src_ip, dst_ip, dst_service,
-                                          session=_session, auth=_auth)
+        super(RequestImpl, self).__init__(
+            MessageType.REQUEST, _src_ip, dst_ip, dst_service, session=_session, auth=_auth
+        )
 
         if original_request:
             self._src_service = original_request.src_service
@@ -125,7 +140,7 @@ class RequestImpl(Request, MessageImpl):
         return self._action
 
     @staticmethod
-    def cast_from(o: Request) -> 'RequestImpl':
+    def cast_from(o: Request) -> "RequestImpl":
         if isinstance(o, RequestImpl):
             return o
         else:
@@ -133,16 +148,26 @@ class RequestImpl(Request, MessageImpl):
 
 
 class ResponseImpl(Response, MessageImpl):
-    def __init__(self, request: MessageImpl, status: Status = None,
-                 content: Any = None, session: Session = None,
-                 auth: Optional[Union[Authorization, AuthenticationToken, AuthenticationTarget]] = None,
-                 original_response: Optional[Response] = None) -> None:
+    def __init__(
+        self,
+        request: MessageImpl,
+        status: Status = None,
+        content: Any = None,
+        session: Session = None,
+        auth: Optional[Union[Authorization, AuthenticationToken, AuthenticationTarget]] = None,
+        original_response: Optional[Response] = None,
+    ) -> None:
 
-        super(ResponseImpl, self).__init__(MessageType.RESPONSE, request.dst_ip, request.src_ip,
-                                           session=session, auth=auth, force_id=request.id)
+        super(ResponseImpl, self).__init__(
+            MessageType.RESPONSE, request.dst_ip, request.src_ip, session=session, auth=auth, force_id=request.id
+        )
 
         self._status = status
         self._content = content
+
+        # Copy platform-specific information
+        self._platform_specific = request.platform_specific
+
         if isinstance(request, Request):
             self._action = request.action
         else:
@@ -150,9 +175,6 @@ class ResponseImpl(Response, MessageImpl):
         # Response switches the source and destination services
         self._src_service = request.dst_service
         self._dst_service = request.src_service
-
-        # Copy platform-specific information
-        self._platform_specific = request.platform_specific
 
     @property
     def action(self) -> Action:
@@ -165,3 +187,10 @@ class ResponseImpl(Response, MessageImpl):
     @property
     def content(self) -> Optional[Any]:
         return self._content
+
+    @staticmethod
+    def cast_from(o: Response) -> "ResponseImpl":
+        if isinstance(o, ResponseImpl):
+            return o
+        else:
+            raise ValueError("Malformed underlying object passed with the Response interface")

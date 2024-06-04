@@ -1,13 +1,8 @@
-import json
-import requests
-import uuid
-
 from dataclasses import dataclass
 from typing import Optional, List, Union, Any, Type, Dict
 
 from cyst.api.configuration import ServiceParameter
 from cyst.api.configuration.configuration import ConfigItem
-from cyst.api.configuration.host.service import ActiveServiceConfig
 from cyst.api.configuration.network.node import NodeConfig
 from cyst.api.environment.configuration import (
     EnvironmentConfiguration,
@@ -17,15 +12,27 @@ from cyst.api.environment.configuration import (
     NetworkConfiguration,
     ExploitConfiguration,
     ActionConfiguration,
-    AccessConfiguration, ActiveServiceInterfaceType, ObjectType, ConfigurationObjectType
+    AccessConfiguration,
+    ActiveServiceInterfaceType,
+    ObjectType,
+    ConfigurationObjectType,
 )
 from cyst.api.environment.message import Message
 from cyst.api.environment.messaging import EnvironmentMessaging
 from cyst.api.environment.infrastructure import EnvironmentInfrastructure
 from cyst.api.environment.platform import Platform
 from cyst.api.host.service import ActiveService, Service, PassiveService
-from cyst.api.logic.access import AccessScheme, AuthenticationProvider, Authorization, AccessLevel, AuthenticationToken, AuthenticationTarget, AuthenticationTokenType, AuthenticationTokenSecurity, \
-    AuthenticationProviderType
+from cyst.api.logic.access import (
+    AccessScheme,
+    AuthenticationProvider,
+    Authorization,
+    AccessLevel,
+    AuthenticationToken,
+    AuthenticationTarget,
+    AuthenticationTokenType,
+    AuthenticationTokenSecurity,
+    AuthenticationProviderType,
+)
 from cyst.api.logic.data import Data
 from cyst.api.network.elements import Route, Interface, Connection
 from cyst.api.network.firewall import FirewallPolicy, FirewallRule
@@ -35,7 +42,12 @@ from netaddr import IPAddress, IPNetwork
 
 
 class GeneralConfigurationImpl(GeneralConfiguration):
-    def __init__(self, platform: Platform, env_general_configuration: GeneralConfiguration, infrastructure: EnvironmentInfrastructure) -> None:
+    def __init__(
+        self,
+        platform: Platform,
+        env_general_configuration: GeneralConfiguration,
+        infrastructure: EnvironmentInfrastructure,
+    ) -> None:
         self._platform = platform
         self._infrastructure = infrastructure
         self._objects = {}
@@ -52,14 +64,18 @@ class GeneralConfigurationImpl(GeneralConfiguration):
     def load_configuration(self, config: str) -> List[ConfigItem]:
         return self._env_general_configuration.load_configuration(config)
 
-    def get_configuration_by_id(self, id: str, configuration_type: Type[ConfigurationObjectType]) -> ConfigurationObjectType:
+    def get_configuration_by_id(
+        self, id: str, configuration_type: Type[ConfigurationObjectType]
+    ) -> ConfigurationObjectType:
         return self._env_general_configuration.get_configuration_by_id(id, configuration_type)
 
     # ------------------------------------------------------------------------------------------------------------------
     # Local methods
     def get_object_by_id(self, id: str, object_type: Type[ObjectType]) -> ObjectType:
         if object_type != ActiveService:
-            raise RuntimeError(f"Docker+Cryton platform only supports getting active services as objects, not {object_type}")
+            raise RuntimeError(
+                f"Docker+Cryton platform only supports getting active services as objects, not {object_type}"
+            )
 
         if id not in self._objects:
             raise RuntimeError(f"Object with the id {id} not available in configuration.")
@@ -71,8 +87,6 @@ class GeneralConfigurationImpl(GeneralConfiguration):
 
     # Not fancying type removal, but it is unimportant here and only pollutes the code
     def configure(self, *config_item: ConfigItem) -> Platform:
-        config = self._env_general_configuration.save_configuration(indent=1)
-
         # Infrastructure is ready, create all active services by going through nodes
         for item in config_item:
             if isinstance(item, NodeConfig):
@@ -80,55 +94,24 @@ class GeneralConfigurationImpl(GeneralConfiguration):
                     for active_service in item.active_services:
                         # Node requirement is ignored. Waiting for a change in code that will remove it.
                         service_id = item.id + "." + active_service.name
-                        s = self._infrastructure.service_store.create_active_service(active_service.type, active_service.owner,
-                                                                                     active_service.name, None, active_service.access_level,
-                                                                                     active_service.configuration,
-                                                                                     item.id + "." + active_service.name)
+                        s = self._infrastructure.service_store.create_active_service(
+                            active_service.type,
+                            active_service.owner,
+                            active_service.name,
+                            None,
+                            active_service.access_level,
+                            active_service.configuration,
+                            item.id + "." + active_service.name,
+                        )
                         if not s:
                             raise RuntimeError(f"Could not create active service with the name {active_service.name}")
 
                         self._objects[service_id] = s
 
-        data = {
-            "name": "demo",
-            "description": str(config)
-        }
-
-        print("Creating Template")
-        template = requests.post('http://127.0.0.1:8000/templates/create/', data=json.dumps(data))
-        if template.status_code != 201:
-            raise RuntimeError(f"message: {template.text}, code: {template.status_code}")
-        else:
-            print("Template created successfully")
-            template_id = template.json()["id"]
-
-        data = {
-            "name": "run-" + str(uuid.uuid4()),
-            "template_id": template_id,
-            "agent_ids": [
-                1
-            ]
-        }
-
-        print("Creating Run")
-        run = requests.post('http://127.0.0.1:8000/runs/create/', data=json.dumps(data))
-        if run.status_code != 201:
-            raise RuntimeError(f"message: {run.text}, code: {run.status_code}")
-        else:
-            print("Run created successfully")
-            run_id = run.json()["id"]
-
-        print("Running the stuff")
-        run_start = requests.get(f"http://127.0.0.1:8000/runs/start/{run_id}/")
-        if run_start.status_code != 200:
-            raise RuntimeError(f"message: {run_start.text}, code: {run_start.status_code}")
-        else:
-            print("Everything started successfully")
-
         return self._platform
 
     @staticmethod
-    def cast_from(o: GeneralConfiguration) -> 'GeneralConfigurationImpl':
+    def cast_from(o: GeneralConfiguration) -> "GeneralConfigurationImpl":
         if isinstance(o, GeneralConfigurationImpl):
             return o
         else:
@@ -145,7 +128,9 @@ class NodeConfigurationImpl(NodeConfiguration):
     def create_port(self, ip: Union[str, IPAddress] = "", mask: str = "", index: int = 0, id: str = "") -> Interface:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def create_interface(self, ip: Union[str, IPAddress] = "", mask: str = "", index: int = 0, id: str = "") -> Interface:
+    def create_interface(
+        self, ip: Union[str, IPAddress] = "", mask: str = "", index: int = 0, id: str = ""
+    ) -> Interface:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
     def create_route(self, net: IPNetwork, port: int, metric: int, id: str = "") -> Route:
@@ -183,17 +168,35 @@ class NodeConfigurationImpl(NodeConfiguration):
 
 
 class ServiceConfigurationImpl(ServiceConfiguration):
-    def create_active_service(self, type: str, owner: str, name: str, node: Node, service_access_level: AccessLevel = AccessLevel.LIMITED, configuration: Optional[Dict[str, Any]] = None,
-                              id: str = "") -> Optional[Service]:
+    def create_active_service(
+        self,
+        type: str,
+        owner: str,
+        name: str,
+        node: Node,
+        service_access_level: AccessLevel = AccessLevel.LIMITED,
+        configuration: Optional[Dict[str, Any]] = None,
+        id: str = "",
+    ) -> Optional[Service]:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def get_service_interface(self, service: ActiveService, control_interface_type: Type[ActiveServiceInterfaceType]) -> ActiveServiceInterfaceType:
+    def get_service_interface(
+        self, service: ActiveService, control_interface_type: Type[ActiveServiceInterfaceType]
+    ) -> ActiveServiceInterfaceType:
         if isinstance(service, control_interface_type):
             return service
         else:
             raise RuntimeError("Given active service does not provide control interface of given type.")
 
-    def create_passive_service(self, type: str, owner: str, version: str = "0.0.0", local: bool = False, service_access_level: AccessLevel = AccessLevel.LIMITED, id: str = "") -> Service:
+    def create_passive_service(
+        self,
+        type: str,
+        owner: str,
+        version: str = "0.0.0",
+        local: bool = False,
+        service_access_level: AccessLevel = AccessLevel.LIMITED,
+        id: str = "",
+    ) -> Service:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
     def update_service_version(self, service: PassiveService, version: str = "0.0.0") -> None:
@@ -231,14 +234,30 @@ class NetworkConfigurationImpl(NetworkConfiguration):
     def add_node(self, node: Node) -> None:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def add_connection(self, source: Node, target: Node, source_port_index: int = -1, target_port_index: int = -1, net: str = "", connection: Optional[Connection] = None) -> Connection:
+    def add_connection(
+        self,
+        source: Node,
+        target: Node,
+        source_port_index: int = -1,
+        target_port_index: int = -1,
+        net: str = "",
+        connection: Optional[Connection] = None,
+    ) -> Connection:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
     def get_connections(self, node: Node, port_index: Optional[int] = None) -> List[Connection]:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def create_session(self, owner: str, waypoints: List[Union[str, Node]], src_service: Optional[str] = None, dst_service: Optional[str] = None, parent: Optional[Session] = None, defer: bool = False,
-                       reverse: bool = False) -> Optional[Session]:
+    def create_session(
+        self,
+        owner: str,
+        waypoints: List[Union[str, Node]],
+        src_service: Optional[str] = None,
+        dst_service: Optional[str] = None,
+        parent: Optional[Session] = None,
+        defer: bool = False,
+        reverse: bool = False,
+    ) -> Optional[Session]:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
     def append_session(self, original_session: Session, appended_session: Session) -> Session:
@@ -249,11 +268,20 @@ class NetworkConfigurationImpl(NetworkConfiguration):
 
 
 class AccessConfigurationImpl(AccessConfiguration):
-    def create_authentication_provider(self, provider_type: AuthenticationProviderType, token_type: AuthenticationTokenType, security: AuthenticationTokenSecurity, ip: Optional[IPAddress],
-                                       timeout: int, id: str = "") -> AuthenticationProvider:
+    def create_authentication_provider(
+        self,
+        provider_type: AuthenticationProviderType,
+        token_type: AuthenticationTokenType,
+        security: AuthenticationTokenSecurity,
+        ip: Optional[IPAddress],
+        timeout: int,
+        id: str = "",
+    ) -> AuthenticationProvider:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def create_authentication_token(self, type: AuthenticationTokenType, security: AuthenticationTokenSecurity, identity: str, is_local: bool) -> AuthenticationToken:
+    def create_authentication_token(
+        self, type: AuthenticationTokenType, security: AuthenticationTokenSecurity, identity: str, is_local: bool
+    ) -> AuthenticationToken:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
     def register_authentication_token(self, provider: AuthenticationProvider, token: AuthenticationToken) -> bool:
@@ -262,10 +290,19 @@ class AccessConfigurationImpl(AccessConfiguration):
     def unregister_authentication_token(self, token_identity: str, provider: AuthenticationProvider) -> None:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def create_and_register_authentication_token(self, provider: AuthenticationProvider, identity: str) -> Optional[AuthenticationToken]:
+    def create_and_register_authentication_token(
+        self, provider: AuthenticationProvider, identity: str
+    ) -> Optional[AuthenticationToken]:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def create_authorization(self, identity: str, access_level: AccessLevel, id: str, nodes: Optional[List[str]] = None, services: Optional[List[str]] = None) -> Authorization:
+    def create_authorization(
+        self,
+        identity: str,
+        access_level: AccessLevel,
+        id: str,
+        nodes: Optional[List[str]] = None,
+        services: Optional[List[str]] = None,
+    ) -> Authorization:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
     def create_access_scheme(self, id: str = "") -> AccessScheme:
@@ -280,16 +317,22 @@ class AccessConfigurationImpl(AccessConfiguration):
     def remove_authorization_from_scheme(self, auth: Authorization, scheme: AccessScheme) -> None:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def evaluate_token_for_service(self, service: Service, token: AuthenticationToken, node: Node, fallback_ip: Optional[IPAddress]) -> Optional[Union[Authorization, AuthenticationTarget]]:
+    def evaluate_token_for_service(
+        self, service: Service, token: AuthenticationToken, node: Node, fallback_ip: Optional[IPAddress]
+    ) -> Optional[Union[Authorization, AuthenticationTarget]]:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def disable_authentication_token(self, provider: AuthenticationProvider, token: AuthenticationToken, time: int) -> None:
+    def disable_authentication_token(
+        self, provider: AuthenticationProvider, token: AuthenticationToken, time: int
+    ) -> None:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
     def enable_authentication_token(self, provider: AuthenticationProvider, token: AuthenticationToken) -> None:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
-    def create_service_access(self, service: Service, identity: str, access_level: AccessLevel, tokens: List[AuthenticationToken] = None) -> Optional[List[AuthenticationToken]]:
+    def create_service_access(
+        self, service: Service, identity: str, access_level: AccessLevel, tokens: List[AuthenticationToken] = None
+    ) -> Optional[List[AuthenticationToken]]:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
     def modify_existing_access(self, service: Service, identity: str, access_level: AccessLevel) -> bool:

@@ -50,7 +50,8 @@ setup(
         'Operating System :: OS Independent'
     ],
     # If you use the provided directory structure, you should not need to alter this.
-    packages=find_packages(exclude=['tests', 'docs']) + find_namespace_packages(include=['cyst_models.*']),
+    packages=find_packages(exclude=['tests', 'docs']) + find_namespace_packages(
+        include=['cyst_models.*', 'cyst_platforms.*']),
     python_requires='>=3.9, <4',
 
     # This field lists other packages that your project depends on to run.
@@ -80,10 +81,10 @@ setup(
     # issues, where the source is hosted, where to say thanks to the package
     # maintainers, and where to support the project financially. The key is
     # what's used to render the link text on PyPI.
-    #project_urls={  # Optional
+    # project_urls={  # Optional
     #    'Bug Reports': 'https://github.com/pypa/sampleproject/issues',
     #    'Funding': 'https://donate.pypi.org',
     #    'Say Thanks!': 'http://saythanks.io/to/example',
     #    'Source': 'https://github.com/pypa/sampleproject/',
-    #},
+    # },
 )

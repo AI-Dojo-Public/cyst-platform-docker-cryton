@@ -201,7 +201,7 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
         for response in responses_to_process:
             if isinstance(response, Response):  # This is here to shut up pycharm type control
                 r = ResponseImpl.cast_from(response)
-                self._environment_configuration.general.get_object_by_id(
+                await self._environment_configuration.general.get_object_by_id(
                     r.platform_specific["caller_id"], ActiveService
                 ).process_message(r)
 
@@ -231,7 +231,7 @@ def create_platform(
 
 
 platform_description = PlatformDescription(
-    specification=PlatformSpecification(PlatformType.EMULATION, "docker+cryton"),
+    specification=PlatformSpecification(PlatformType.REAL_TIME, "docker+cryton"),
     description="A platform using the Docker emulation for infrastructure creation and Cryton for action execution",
     creation_fn=create_platform,
 )

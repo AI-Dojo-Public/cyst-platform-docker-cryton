@@ -84,7 +84,7 @@ class Cryton:
         return get_request(f"{self._api_root}stages/?plan_model_id={plan_id}").json()[0]["id"]
 
     def _create_run(self, plan_id: int, worker_ids: list[int]) -> int:
-        return post_request(f"{self._api_root}runs/", data={"plan_id": plan_id, "worker_ids": worker_ids}).json()["id"]
+        return post_request(f"{self._api_root}runs/", json={"plan_id": plan_id, "worker_ids": worker_ids}).json()["id"]
 
     def _execute_run(self, run_id: int):
         if post_request(f"{self._api_root}runs/{run_id}/execute/", data={"run_id": run_id}).status_code != 200:
@@ -148,7 +148,7 @@ class Cryton:
         template_id = self._create_template(template)
         plan_id = self._create_plan(template_id)
         stage_id = self._get_stage_id(plan_id)
-        run_id = self._create_run(plan_id, worker_ids=[worker_id])
+        run_id = self._create_run(plan_id, [worker_id])
         stage_execution_id = self._get_run_report(run_id)["detail"]["plan_executions"][0]["stage_executions"][0]["id"]
         self._execute_run(run_id)
 

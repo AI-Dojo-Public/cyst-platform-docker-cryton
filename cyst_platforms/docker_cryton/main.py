@@ -30,6 +30,7 @@ from cyst.api.logic.action import Action
 from cyst.api.network.session import Session
 
 from cyst_platforms.docker_cryton.configuration import EnvironmentConfigurationImpl, GeneralConfigurationImpl
+from cyst_platforms.docker_cryton.host.service import ServiceImpl
 from cyst_platforms.docker_cryton.message import RequestImpl, ResponseImpl
 from cyst_platforms.docker_cryton.cryton_resource import CrytonResource
 from cyst_platforms.docker_cryton.clients.dr_emu import DrEmu
@@ -201,9 +202,8 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
         for response in responses_to_process:
             if isinstance(response, Response):  # This is here to shut up pycharm type control
                 r = ResponseImpl.cast_from(response)
-                await self._environment_configuration.general.get_object_by_id(
-                    r.platform_specific["caller_id"], ActiveService
-                ).process_message(r)
+                s = ServiceImpl(self.configuration.general.get_object_by_id(response.platform_specific["caller_id"], ActiveService))
+                self._platform_interface.execute_task(r, s)
 
         for request in requests_to_process:
             self._platform_interface.execute_task(request)

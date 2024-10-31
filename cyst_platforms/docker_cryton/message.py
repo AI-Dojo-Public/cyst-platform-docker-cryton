@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 from cyst.api.logic.action import Action
 from netaddr import IPAddress
 from typing import Type, Dict, Any, Optional, Union
@@ -11,7 +9,6 @@ from cyst.api.network.session import Session
 from cyst.api.utils.counter import Counter
 
 
-@dataclass
 class MessageImpl(Message):
 
     def __init__(
@@ -25,9 +22,6 @@ class MessageImpl(Message):
         force_id: int = -1,
         ttl: int = 64,
     ):
-
-        super(MessageImpl, self).__init__()
-
         if force_id == -1:
             self._id = Counter().get("message")
         else:

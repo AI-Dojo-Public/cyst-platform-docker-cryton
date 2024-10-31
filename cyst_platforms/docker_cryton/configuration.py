@@ -33,6 +33,7 @@ from cyst.api.logic.access import (
     AuthenticationTokenSecurity,
     AuthenticationProviderType,
 )
+from cyst.api.configuration.logic.exploit import ExploitConfig
 from cyst.api.logic.data import Data
 from cyst.api.network.elements import Route, Interface, Connection
 from cyst.api.network.firewall import FirewallPolicy, FirewallRule
@@ -107,6 +108,26 @@ class GeneralConfigurationImpl(GeneralConfiguration):
                             raise RuntimeError(f"Could not create active service with the name {active_service.name}")
 
                         self._objects[service_id] = s
+            elif isinstance(item, ExploitConfig):
+                self._objects[item.id] = item
+                params = []
+                if item.parameters:
+                    for p in item.parameters:
+                        param = self._platform.configuration.exploit.create_exploit_parameter(p.type, p.value,
+                                                                                              p.immutable)
+                        params.append(param)
+
+                services = []
+                for s in item.services:
+                    service = self._platform.configuration.exploit.create_vulnerable_service(
+                        s.name, s.min_version, s.max_version
+                    )
+                    services.append(service)
+
+                e = self._platform.configuration.exploit.create_exploit(
+                    item.id, services, item.locality, item.category, *params
+                )
+                self._platform.configuration.exploit.add_exploit(e)
 
         return self._platform
 

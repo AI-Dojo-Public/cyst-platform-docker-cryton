@@ -48,8 +48,9 @@ class DrEmu:
         # Only one infrastructure per run is supported
         infrastructure_id = get_request(f"{self._api_url}runs/get/{self._run_id}/").json()["infrastructure_ids"][0]
         infrastructure_info = get_request(f"{self._api_url}infrastructures/get/{infrastructure_id}/").json()
+        infrastructure_name = infrastructure_info["name"]
         infrastructure_networks = infrastructure_info["networks"]
-        infrastructure_attackers = infrastructure_info["attackers"]  # node_id: worker_name
+        infrastructure_attackers: dict[str, str] = infrastructure_info["attackers"]  # node_id: worker_name
 
         ip_lookup: dict[str, str] = dict()
         for network in infrastructure_networks:
@@ -70,8 +71,7 @@ class DrEmu:
         # parse attackers to match the cyst infrastructure
         parsed_attackers: dict[str, str] = dict()
         for attacker_node, attacker_name in infrastructure_attackers.items():
-            stripped_node_id = attacker_node.split("-", 1)
-            node_id = stripped_node_id[0] if len(stripped_node_id) == 1 else stripped_node_id[1]
+            node_id = attacker_node.removeprefix(f"{infrastructure_name}-")
             parsed_attackers[node_id] = attacker_name
 
         return ip_lookup, parsed_attackers

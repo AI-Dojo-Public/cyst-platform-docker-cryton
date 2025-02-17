@@ -17,6 +17,7 @@ from cyst.api.environment.configuration import (
     GeneralConfiguration,
     ExploitConfiguration,
     ActionConfiguration,
+    PhysicalConfiguration,
 )
 from cyst.api.environment.infrastructure import EnvironmentInfrastructure
 from cyst.api.environment.message import Request, Status, Response, Message, MessageType
@@ -28,6 +29,7 @@ from cyst.api.environment.resources import EnvironmentResources
 from cyst.api.logic.access import Authorization, AuthenticationTarget, AuthenticationToken
 from cyst.api.logic.action import Action
 from cyst.api.network.session import Session
+
 
 from cyst_platforms.docker_cryton.configuration import EnvironmentConfigurationImpl, GeneralConfigurationImpl
 from cyst_platforms.docker_cryton.host.service import ServiceImpl
@@ -49,11 +51,14 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
         action_configuration: ActionConfiguration,
         exploit_configuration: ExploitConfiguration,
         infrastructure: EnvironmentInfrastructure,
+        physical_configuration: PhysicalConfiguration,
+        platform_type: PlatformType,
     ):
 
         self._platform_interface = platform_interface
         self._infrastructure = infrastructure
         self._resources = resources
+        self._platform_type = platform_type
 
         self._environment_configuration = EnvironmentConfigurationImpl()
         self._environment_configuration.action = action_configuration
@@ -61,6 +66,7 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
         self._environment_configuration.general = GeneralConfigurationImpl(
             self, general_configuration, self._infrastructure
         )
+        self._environment_configuration.physical = physical_configuration
 
         self._message_queue = None
         self._messages: List[Tuple[float, int, Message]] = []
@@ -217,6 +223,7 @@ def create_platform(
     resources: EnvironmentResources,
     action_configuration: ActionConfiguration,
     exploit_configuration: ExploitConfiguration,
+    physical_configuration: PhysicalConfiguration,
     infrastructure: EnvironmentInfrastructure,
 ) -> DockerCrytonPlatform:
     p = DockerCrytonPlatform(
@@ -226,6 +233,8 @@ def create_platform(
         action_configuration,
         exploit_configuration,
         infrastructure,
+        physical_configuration,
+        PlatformType.REAL_TIME,
     )
     return p
 

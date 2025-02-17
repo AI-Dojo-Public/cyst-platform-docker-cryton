@@ -21,20 +21,15 @@ class WorkerMetadata:
 
 
 class Cryton:
-    STEP_FINAL_STATES = ["FINISHED", "ERROR"]
+    STEP_FINAL_STATES = ["FINISHED", "ERROR", "FAILED"]
     TEMPLATE = {
-        "plan": {
-            "name": "Dynamic plan equivalent",
-            "owner": "CYST",
-            "dynamic": True,
-            "stages": [
-                {
-                    "name": "Global stage",
-                    "trigger_type": "delta",
-                    "trigger_args": {"seconds": 0},
-                    "steps": [],
-                }
-            ],
+        "name": "Dynamic plan equivalent",
+        "metadata": {"owner": "CYST",},
+        "dynamic": True,
+        "stages": {
+            "Global stage": {
+                "steps": {},
+            }
         }
     }
 
@@ -81,7 +76,7 @@ class Cryton:
         ).json()["id"]
 
     def _get_stage_id(self, plan_id: int) -> int:
-        return get_request(f"{self._api_root}stages/?plan_model_id={plan_id}").json()[0]["id"]
+        return get_request(f"{self._api_root}stages/?plan_id={plan_id}").json()[0]["id"]
 
     def _create_run(self, plan_id: int, worker_ids: list[int]) -> int:
         return post_request(f"{self._api_root}runs/", json={"plan_id": plan_id, "worker_ids": worker_ids}).json()["id"]
@@ -116,9 +111,10 @@ class Cryton:
 
     @staticmethod
     def _add_update_rules_to_template(step_template: dict, update_rules: dict) -> None:
-        if step_template.get("output") is None:
-            step_template["output"] = dict()
-        output_parameter: dict = step_template["output"]
+        inner_template = step_template[next(iter(step_template))]
+        if inner_template.get("output") is None:
+            inner_template["output"] = dict()
+        output_parameter: dict = inner_template["output"]
 
         if output_parameter.get("replace") is None:
             output_parameter["replace"] = dict()
@@ -143,7 +139,7 @@ class Cryton:
             raise RuntimeError(f"Worker with ID {worker_id} ({worker_name}) is unreachable.")
 
         template = copy.deepcopy(self.TEMPLATE)
-        template["plan"]["name"] = f"CYST Plan for Worker {worker_id}"
+        template["name"] = f"CYST Plan for Worker {worker_id}"
 
         template_id = self._create_template(template)
         plan_id = self._create_plan(template_id)

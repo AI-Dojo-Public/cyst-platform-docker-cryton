@@ -1,5 +1,6 @@
 from dataclasses import dataclass
-from typing import Optional, List, Union, Any, Type, Dict
+from datetime import datetime
+from typing import Optional, List, Union, Any, Type, Dict, Tuple
 
 from cyst.api.configuration import ServiceParameter
 from cyst.api.configuration.configuration import ConfigItem
@@ -16,10 +17,12 @@ from cyst.api.environment.configuration import (
     ActiveServiceInterfaceType,
     ObjectType,
     ConfigurationObjectType,
+    PhysicalConfiguration,
 )
 from cyst.api.environment.message import Message
 from cyst.api.environment.messaging import EnvironmentMessaging
 from cyst.api.environment.infrastructure import EnvironmentInfrastructure
+from cyst.api.environment.physical import PhysicalConnection, PhysicalAccess, PhysicalLocation
 from cyst.api.environment.platform import Platform
 from cyst.api.host.service import ActiveService, Service, PassiveService
 from cyst.api.logic.access import (
@@ -39,6 +42,7 @@ from cyst.api.network.elements import Route, Interface, Connection
 from cyst.api.network.firewall import FirewallPolicy, FirewallRule
 from cyst.api.network.node import Node
 from cyst.api.network.session import Session
+from cyst.api.utils.duration import Duration
 from netaddr import IPAddress, IPNetwork
 
 
@@ -360,6 +364,58 @@ class AccessConfigurationImpl(AccessConfiguration):
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
 
+class PhysicalConfigurationImpl(PhysicalConfiguration):
+
+    def create_physical_location(self, location_id: str | None) -> PhysicalLocation:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def get_physical_location(self, location_id: str) -> PhysicalLocation | None:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def get_physical_locations(self) -> List[PhysicalLocation]:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def remove_physical_location(self, location_id: str) -> None:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def create_physical_access(self, identity: str, time_from: datetime | None,
+                               time_to: datetime | None) -> PhysicalAccess:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def add_physical_access(self, location_id: str, access: PhysicalAccess) -> None:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def get_physical_accesses(self, location_id: str) -> List[PhysicalAccess]:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def remove_physical_access(self, location_id: str, access: PhysicalAccess) -> None:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def add_physical_connection(self, origin: str, destination: str, travel_time: Duration) -> None:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def remove_physical_connection(self, origin: str, destination: str) -> None:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def get_physical_connections(self, origin: str, destination: str | None) -> List[PhysicalConnection]:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def place_asset(self, location_id: str, asset: str) -> None:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def remove_asset(self, location_id: str, asset: str) -> None:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def move_asset(self, origin: str, destination: str, asset: str) -> Tuple[bool, str, str]:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def get_assets(self, location_id: str) -> List[str]:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+    def get_location(self, asset: str) -> str:
+        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+
+
 @dataclass
 class EnvironmentConfigurationImpl(EnvironmentConfiguration):
     general: Optional[GeneralConfiguration] = None
@@ -369,3 +425,4 @@ class EnvironmentConfigurationImpl(EnvironmentConfiguration):
     exploit: Optional[ExploitConfiguration] = None
     action: Optional[ActionConfiguration] = None
     access: Optional[AccessConfiguration] = AccessConfigurationImpl()
+    physical: Optional[PhysicalConfiguration] = PhysicalConfigurationImpl()

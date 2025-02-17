@@ -13,7 +13,7 @@ setup(
     # The name of your package in pip accepted format
     name='cyst-platforms-docker-cryton',
     # The version of your package
-    version='0.1.0',
+    version='0.2.0',
     # The short description of your package
     description='A platform using the Docker emulation for infrastructure creation and Cryton for action execution',
     long_description=long_description,
@@ -58,10 +58,9 @@ setup(
     # Any package you put here will be installed by pip when your project is
     # installed, so they must be valid existing projects.
     install_requires=[
-        'cyst-core>=0.6.0a0',
+        'cyst-core>=0.6.0',
         'requests',
         'PyYAML',
-        'netaddr'
     ],
 
     # Add entry points for your package. It should be the instances of package configuration objects.

@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 from heapq import heappush, heappop
 
+from cyst.api.configuration import SessionConfig
 from cyst.api.environment.external import ResourcePersistence
 from netaddr import IPAddress
 from typing import Optional, Union, Any, List, Tuple, Callable
@@ -96,8 +97,11 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
         c.configure(*config_item)
 
         config = c.save_configuration(1)
-        ip_lookup, attackers = self._dr_emu_client.configure(str(config))
+        ip_lookup, attackers = self._dr_emu_client.configure(config)
         self._cryton_resource.configure(attackers, ip_lookup)
+
+        for session in [c for c in config_item if isinstance(c, SessionConfig)]:
+            self._cryton_resource.client.create_session(session.start, session.id)
 
         return self
 

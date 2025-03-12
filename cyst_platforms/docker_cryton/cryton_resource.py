@@ -20,6 +20,10 @@ class CrytonResource(ResourceImpl):
 
         return True
 
+    @property
+    def client(self) -> Cryton:
+        return self._cryton_client
+
     def configure(self, attackers: dict, ip_lookup: dict):
         self._cryton_client.check_connection()
 

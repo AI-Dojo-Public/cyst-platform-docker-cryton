@@ -101,7 +101,7 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
         self._cryton_resource.configure(attackers, ip_lookup)
 
         for session in [c for c in config_item if isinstance(c, SessionConfig)]:
-            self._cryton_resource.client.create_session(session.start, session.id)
+            self._cryton_resource.client.create_session(session.waypoints[0], session.id)
 
         return self
 

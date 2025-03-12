@@ -36,7 +36,7 @@ from cyst.api.logic.access import (
     AuthenticationTokenSecurity,
     AuthenticationProviderType,
 )
-from cyst.api.configuration.logic.exploit import ExploitConfig
+from cyst.api.configuration import ExploitConfig, SessionConfig
 from cyst.api.logic.data import Data
 from cyst.api.network.elements import Route, Interface, Connection
 from cyst.api.network.firewall import FirewallPolicy, FirewallRule
@@ -56,6 +56,7 @@ class GeneralConfigurationImpl(GeneralConfiguration):
         self._platform = platform
         self._infrastructure = infrastructure
         self._objects = {}
+        self._sessions = dict()
         self._env_general_configuration = env_general_configuration
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -77,7 +78,7 @@ class GeneralConfigurationImpl(GeneralConfiguration):
     # ------------------------------------------------------------------------------------------------------------------
     # Local methods
     def get_object_by_id(self, id: str, object_type: Type[ObjectType]) -> ObjectType:
-        if object_type != ActiveService:
+        if object_type not in [ActiveService, SessionConfig]:
             raise RuntimeError(
                 f"Docker+Cryton platform only supports getting active services as objects, not {object_type}"
             )
@@ -99,13 +100,15 @@ class GeneralConfigurationImpl(GeneralConfiguration):
                     for active_service in item.active_services:
                         # Node requirement is ignored. Waiting for a change in code that will remove it.
                         service_id = item.id + "." + active_service.name
+                        conf = active_service.configuration or dict()
+                        conf["__sessions"] = self._sessions
                         s = self._infrastructure.service_store.create_active_service(
                             active_service.type,
                             active_service.owner,
                             active_service.name,
                             None,
                             active_service.access_level,
-                            active_service.configuration,
+                            conf,
                             item.id + "." + active_service.name,
                         )
                         if not s:
@@ -132,6 +135,19 @@ class GeneralConfigurationImpl(GeneralConfiguration):
                     item.id, services, item.locality, item.category, *params
                 )
                 self._platform.configuration.exploit.add_exploit(e)
+            elif isinstance(item, SessionConfig):
+                session = self._platform.configuration.network.create_session(
+                    owner="__system",
+                    waypoints=item.waypoints,
+                    src_service=item.src_service,
+                    dst_service=item.dst_service,
+                    parent=None,
+                    defer=True,
+                    reverse=item.reverse,
+                    id=item.id
+                )
+                self._objects[item.id] = session
+                self._sessions[item.id] = session
 
         return self._platform
 
@@ -255,6 +271,42 @@ class ServiceConfigurationImpl(ServiceConfiguration):
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
 
 
+class SessionImpl(Session):
+    def __init__(self, owner: str = None, session_id: str = None, parent: Optional["SessionImpl"] = None, path: list[str] = None):
+        self._owner = owner
+        self._id = session_id
+        self._parent = parent
+        self._path: list[str] = path
+
+    @property
+    def owner(self) -> str:
+        return self._owner
+
+    @property
+    def id(self) -> str:
+        return self._id
+
+    @property
+    def parent(self) -> Optional[Session]:
+        return self._parent
+
+    @property
+    def path(self) -> list[tuple[Optional[IPAddress], Optional[IPAddress]]]:
+        return self._path
+
+    @property
+    def end(self) -> tuple[IPAddress, str]:
+        return self._path[-1]
+
+    @property
+    def start(self) -> tuple[IPAddress, str]:
+        return self._path[0]
+
+    @property
+    def enabled(self) -> bool:
+        return True
+
+
 class NetworkConfigurationImpl(NetworkConfiguration):
     def add_node(self, node: Node) -> None:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
@@ -282,8 +334,9 @@ class NetworkConfigurationImpl(NetworkConfiguration):
         parent: Optional[Session] = None,
         defer: bool = False,
         reverse: bool = False,
+        id: Optional[str] = None
     ) -> Optional[Session]:
-        raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")
+        return SessionImpl(session_id=id, path=waypoints)
 
     def append_session(self, original_session: Session, appended_session: Session) -> Session:
         raise NotImplementedError("Docker+Cryton do not allow partial configuration. Use top-level configure() call.")

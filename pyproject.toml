@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "cyst-platform-docker-cryton"
+version = "0.6.0"
+description = ""
+authors = ["Jiri Raja <raja@ics.muni.cz>"]
+readme = "README.md"
+
+packages = [
+    { include = "cyst_platforms", from = "." }
+]
+
+[tool.poetry.dependencies]
+    python = ">=3.11, <4.0.0"
+    # Use CYST components' local paths and not remote git repositories if you also want to hack on them. Beware that you
+    # will have to make this change in all other dependent projects that will be using the same dependency (this
+    # typically happens with cyst-core).
+    #
+    # ALternativelly, you can use a `poetry add -e <cyst_component_path>`. This will install it all correctly, but
+    # has a high chance of failing to do `poetry update`. But unless you need to actually do `poetry update` this should
+    # work.
+    cyst-core = {git = "https://gitlab.com/ai-dojo-public/cyst-core.git", branch = "master"}
+    # cyst-core = { path = "../cyst-core", develop = true }
+    pyyaml = ">=6.0.1"
+    requests = ">=2.32.2"
+
+[build-system]
+    requires = ["poetry-core"]
+    build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.plugins]
+
+[tool.poetry.plugins."cyst.models"]
+
+[tool.poetry.plugins."cyst.services"]
+
+[tool.poetry.plugins."cyst.metadata_providers"]
+
+[tool.poetry.plugins."cyst.platforms"]
+    docker_cryton="cyst_platforms.docker_cryton.main:platform_description"

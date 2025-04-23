@@ -1,8 +1,9 @@
 from cyst.api.logic.action import Action
 from netaddr import IPAddress
-from typing import Type, Dict, Any, Optional, Union
+from typing import Type, Dict, Any, Optional, Union, Callable, Tuple
 
-from cyst.api.environment.message import Message, MessageType, T, Response, Request, Status
+from cyst.api.environment.message import Message, MessageType, T, Response, Request, Status, Timeout
+from cyst.api.host.service import ActiveService
 from cyst.api.logic.access import Authorization, AuthenticationToken, AuthenticationTarget
 from cyst.api.logic.metadata import Metadata
 from cyst.api.network.session import Session
@@ -188,3 +189,42 @@ class ResponseImpl(Response, MessageImpl):
             return o
         else:
             raise ValueError("Malformed underlying object passed with the Response interface")
+
+
+class TimeoutImpl(Timeout, MessageImpl):
+    def __init__(self, callback: Union[ActiveService, Callable[[Message], Tuple[bool, int]]], start_time: float, duration: float, parameter: Optional[Any]):
+        super(TimeoutImpl, self).__init__(MessageType.TIMEOUT)
+
+        self._start_time = start_time
+        self._duration = duration
+        self._parameter = parameter
+        self._callback = callback
+
+    @property
+    def start_time(self) -> float:
+        return self._start_time
+
+    @property
+    def duration(self) -> float:
+        return self._duration
+
+    @property
+    def parameter(self) -> Any:
+        return self._parameter
+
+    @property
+    def callback(self) -> Callable[[Message], Tuple[bool, int]]:
+        if isinstance(self._callback, ActiveService):
+            return self._callback.process_message
+        else:
+            return self._callback
+
+    def __str__(self) -> str:
+        return "Timeout: [Start: {}, Duration: {}, Parameter: {}]".format(self._start_time, self._duration, self._parameter)
+
+    @staticmethod
+    def cast_from(o: Timeout) -> 'TimeoutImpl':
+        if isinstance(o, TimeoutImpl):
+            return o
+        else:
+            raise ValueError("Malformed underlying object passed with the Request interface")

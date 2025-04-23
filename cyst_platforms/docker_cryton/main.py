@@ -21,7 +21,7 @@ from cyst.api.environment.configuration import (
     PhysicalConfiguration,
 )
 from cyst.api.environment.infrastructure import EnvironmentInfrastructure
-from cyst.api.environment.message import Request, Status, Response, Message, MessageType
+from cyst.api.environment.message import Request, Status, Response, Message, MessageType, Timeout
 from cyst.api.environment.messaging import EnvironmentMessaging
 from cyst.api.environment.platform import Platform, PlatformDescription
 from cyst.api.environment.platform_interface import PlatformInterface
@@ -34,7 +34,7 @@ from cyst.api.network.session import Session
 
 from cyst_platforms.docker_cryton.configuration import EnvironmentConfigurationImpl, GeneralConfigurationImpl
 from cyst_platforms.docker_cryton.host.service import ServiceImpl
-from cyst_platforms.docker_cryton.message import RequestImpl, ResponseImpl
+from cyst_platforms.docker_cryton.message import RequestImpl, ResponseImpl, TimeoutImpl
 from cyst_platforms.docker_cryton.cryton_resource import CrytonResource
 from cyst_platforms.docker_cryton.clients.dr_emu import DrEmu
 
@@ -177,8 +177,8 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
     def timeout(
         self, callback: Union[ActiveService, Callable[[Message], Tuple[bool, int]]], delay: float, parameter: Any = None
     ) -> None:
-        # TODO
-        pass
+        timeout = TimeoutImpl(callback, self.current_time(), delay, parameter)
+        self.send_message(timeout, int(delay))
 
     # ------------------------------------------------------------------------------------------------------------------
     @property
@@ -203,6 +203,9 @@ class DockerCrytonPlatform(Platform, EnvironmentMessaging, Clock):
                     requests_to_process.append(message)
                 elif message.type == MessageType.RESPONSE:
                     responses_to_process.append(message)
+                elif message.type == MessageType.TIMEOUT:
+                    timeout = TimeoutImpl.cast_from(message.cast_to(Timeout))
+                    timeout.callback(message)
 
                 if self._messages:
                     timeout, _, _ = self._messages[0]

@@ -1,7 +1,7 @@
 import copy
 import yaml
 from dataclasses import dataclass
-from asyncio import sleep, run
+import asyncio
 import json
 import re
 import uuid
@@ -104,7 +104,7 @@ class Cryton:
 
     async def _wait_for_step(self, step_execution_id: int):
         while self._get_step_state(step_execution_id) not in self.STEP_FINAL_STATES:
-            await sleep(1)
+            await asyncio.sleep(1)
 
     def _get_step_report(self, cryton_step_ex_id: int) -> dict:
         return get_request(f"{self._api_root}step_executions/{cryton_step_ex_id}/report/").json()
@@ -182,7 +182,7 @@ class Cryton:
                 },
             }
         }, node_id)
-        report = run(self.wait_for_action_result(step_ex_id))
+        report = asyncio.run(self.wait_for_action_result(step_ex_id))
         sess_id = report["serialized_output"]["session_id"]
 
         step_ex_id = self.execute_action({
@@ -197,7 +197,7 @@ class Cryton:
                 },
             }
         }, node_id)
-        report = run(self.wait_for_action_result(step_ex_id))
+        report = asyncio.run(self.wait_for_action_result(step_ex_id))
         sess_id = report["serialized_output"]["session_id"]
         self._set_ex_vars(self._workers[node_id].plan_execution_id, {session_id: sess_id})
         print(f"Session {session_id} on node {node_id} created.")

@@ -1,4 +1,4 @@
-from tests.test_platform import all_config_itemsThe primary use case of the Docker+Cryton platform is emulation. It uses Dr-Emu to build an emulated (dockerized) infrastructure and Cryton to execute attacks on it.
+The primary use case of the Docker+Cryton platform is emulation. It uses Dr-Emu to build an emulated (dockerized) infrastructure and Cryton to execute attacks on it.
 
 ## Settings
 By default, the platform tries to connect to Dr-Emu at `127.0.0.1:8000` and Cryton at `127.0.0.1:8001`.
